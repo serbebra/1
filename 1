@@ -1,0 +1,78 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract DecentralizedFund {
+    address public owner;
+    uint256 public proposalCount;
+    uint256 public minimumVotes;
+    uint256 public minimumApprovalRate;
+    mapping(uint256 => Proposal) public proposals;
+
+    struct Proposal {
+        address creator;
+        string description;
+        uint256 amount;
+        uint256 votes;
+        mapping(address => bool) voters;
+        bool approved;
+        bool executed;
+    }
+
+    event ProposalCreated(uint256 indexed proposalId, address indexed creator, string description, uint256 amount);
+    event Voted(uint256 indexed proposalId, address indexed voter);
+    event ProposalApproved(uint256 indexed proposalId);
+    event ProposalExecuted(uint256 indexed proposalId);
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only owner can call this function");
+        _;
+    }
+
+    constructor(uint256 _minimumVotes, uint256 _minimumApprovalRate) {
+        owner = msg.sender;
+        minimumVotes = _minimumVotes;
+        minimumApprovalRate = _minimumApprovalRate;
+    }
+
+    function createProposal(string memory _description, uint256 _amount) external {
+        require(_amount > 0, "Amount must be greater than 0");
+        uint256 proposalId = proposalCount++;
+        proposals[proposalId] = Proposal({
+            creator: msg.sender,
+            description: _description,
+            amount: _amount,
+            votes: 0,
+            approved: false,
+            executed: false
+        });
+        emit ProposalCreated(proposalId, msg.sender, _description, _amount);
+    }
+
+    function vote(uint256 _proposalId) external {
+        require(_proposalId < proposalCount, "Invalid proposal id");
+        require(!proposals[_proposalId].voters[msg.sender], "Already voted");
+        proposals[_proposalId].voters[msg.sender] = true;
+        proposals[_proposalId].votes++;
+        emit Voted(_proposalId, msg.sender);
+        if (proposals[_proposalId].votes >= minimumVotes) {
+            uint256 approvalRate = (proposals[_proposalId].votes * 100) / totalSupply(); // Assume total supply function exists
+            if (approvalRate >= minimumApprovalRate) {
+                proposals[_proposalId].approved = true;
+                emit ProposalApproved(_proposalId);
+            }
+        }
+    }
+
+    function executeProposal(uint256 _proposalId) external onlyOwner {
+        require(_proposalId < proposalCount, "Invalid proposal id");
+        require(proposals[_proposalId].approved, "Proposal not approved");
+        require(!proposals[_proposalId].executed, "Proposal already executed");
+        proposals[_proposalId].executed = true;
+        // Execute proposal logic here, such as transferring funds
+        emit ProposalExecuted(_proposalId);
+    }
+
+    function changeOwner(address _newOwner) external onlyOwner {
+        owner = _newOwner;
+    }
+}
